@@ -1,1 +1,394 @@
-<!DOCTYPE html><html><body><h1>FinanceFam</h1></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FinanceFam - Meu App Financeiro</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#820ad1" /> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="no-js-warning" style="display:none;padding:1rem;background:#fff4e5;color:#92400e;text-align:center;">
+    Este app funciona melhor com JavaScript ativado.
+  </div>
+
+  <main id="app" class="app">
+    <aside class="sidebar" data-visible="true">
+      <div class="brand">
+        <i class="fa-solid fa-wallet"></i>
+        <span>FinanceFam</span>
+      </div>
+
+      <nav class="nav">
+        <button data-view="home" class="nav-btn active"><i class="fa-solid fa-house"></i><span>Início</span></button>
+        <button data-view="transactions" class="nav-btn"><i class="fa-solid fa-list-ul"></i><span>Extrato</span></button>
+        <button data-view="goals" class="nav-btn"><i class="fa-solid fa-bullseye"></i><span>Metas</span></button>
+        <button data-view="savings" class="nav-btn"><i class="fa-solid fa-piggy-bank"></i><span>Cofre</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button id="btn-theme-toggle" class="icon-btn" aria-label="Alternar tema"><i class="fa-solid fa-moon"></i></button>
+        <button id="btn-logout" class="logout">Sair</button>
+      </div>
+    </aside>
+
+    <section class="main">
+      <header class="topbar">
+        <div class="left">
+          <div class="month-switcher">
+            <button id="prev-month" class="small icon-btn-round">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <div id="current-month"></div>
+            <button id="next-month" class="small icon-btn-round">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+        <div class="right">
+          <div id="user-greeting">Olá, <strong id="user-name">Usuário</strong></div>
+        </div>
+      </header>
+      
+      <div class="content-wrapper">
+          <section id="view-home" class="view active">
+            <div class="cards">
+              <div class="card income">
+                <div class="card-title">Entradas</div>
+                <div class="card-value" id="summary-income">R$ 0,00</div>
+              </div>
+              <div class="card expense">
+                <div class="card-title">Saídas</div>
+                <div class="card-value" id="summary-expense">R$ 0,00</div>
+              </div>
+              <div class="card balance">
+                <div class="card-title">Saldo</div>
+                <div class="card-value" id="summary-balance">R$ 0,00</div>
+              </div>
+            </div>
+
+            <section class="chart-panel card">
+              <h3>Gastos por Categoria</h3>
+              <canvas id="chart-expenses" width="600" height="300"></canvas>
+            </section>
+            
+            <section class="latest-transactions-panel">
+                <h3>Últimos Lançamentos</h3>
+                <div id="latest-transaction-list" class="list latest-list"></div>
+            </section>
+            
+          </section>
+
+          <section id="view-transactions" class="view hidden">
+            <header class="list-header">
+              <h3>Extrato Mensal</h3>
+            </header>
+            <div id="transaction-list" class="list"></div>
+          </section>
+
+          <section id="view-goals" class="view hidden">
+            <header class="list-header">
+              <h3>Minhas Metas</h3>
+              <button id="btn-add-goal" class="btn small primary"><i class="fa-solid fa-plus"></i> Nova Meta</button>
+            </header>
+            <div id="goals-list" class="list">
+                <div class="goal-item card">
+                    <h4>Viagem Europa 🇪🇺</h4>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: 15%;"></div>
+                    </div>
+                    <div class="goal-details">
+                        <span>R$ 1.500,00 de R$ 10.000,00</span>
+                        <span class="percentage">15%</span>
+                    </div>
+                </div>
+            </div>
+          </section>
+
+          <section id="view-savings" class="view hidden">
+            <header class="list-header">
+              <h3>Cofre (Reserva de Emergência)</h3>
+            </header>
+            <div class="list">
+              <div class="savings-card card">
+                <div>Total Guardado</div>
+                <div id="savings-total" class="big">R$ 500,00</div>
+                <div class="actions">
+                  <button id="btn-savings-deposit" class="btn primary">Guardar</button>
+                  <button id="btn-savings-withdraw" class="btn outline">Resgatar</button>
+                </div>
+              </div>
+            </div>
+          </section>
+      </div>
+      
+      <button id="btn-open-modal" class="btn fab primary" title="Novo Lançamento">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+      
+    </section>
+  </main>
+
+  <div id="modal-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header class="modal-header">
+        <h3 id="modal-title">Novo Lançamento</h3>
+        <button class="close-modal icon-btn" id="close-modal"><i class="fa-solid fa-xmark"></i></button>
+      </header>
+      <form id="form-add-transaction" class="modal-body">
+        <div class="form-row">
+          <label>Tipo</label>
+          <div class="type-toggle">
+            <label><input type="radio" name="type" value="expense" checked> Gasto</label>
+            <label><input type="radio" name="type" value="income"> Renda</label>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="amount-input">Valor (R$)</label>
+          <input type="number" id="amount-input" name="amount" step="0.01" required placeholder="0.00" />
+        </div>
+
+        <div class="form-row">
+          <label for="category-select">Categoria</label>
+          <select id="category-select" name="category">
+            <option value="Alimentação">Alimentação</option>
+            <option value="Transporte">Transporte / Combustível</option>
+            <option value="Contas Fixas">Contas Fixas (Aluguel, Luz)</option>
+            <option value="Saúde">Saúde / Medicamentos</option>
+            <option value="Lazer">Lazer / Viagens</option>
+            <option value="Investimentos">Investimentos / Poupança</option>
+            <option value="Salário">Salário / Renda Extra</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="description-input">Descrição</label>
+          <input type="text" id="description-input" name="description" placeholder="Ex: Mercado semanal" />
+        </div>
+
+        <div class="form-row row-two">
+          <div>
+            <label for="date-input">Data</label>
+            <input type="date" id="date-input" name="date" required/>
+          </div>
+          <div>
+            <label for="time-input">Hora (Opcional)</label>
+            <input type="time" id="time-input" name="time" />
+          </div>
+        </div>
+
+        <div class="form-row form-actions">
+          <button type="submit" class="btn primary">Salvar Lançamento</button>
+          <button type="button" class="btn outline" id="cancel-modal">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FinanceFam - Meu App Financeiro</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#820ad1" /> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="no-js-warning" style="display:none;padding:1rem;background:#fff4e5;color:#92400e;text-align:center;">
+    Este app funciona melhor com JavaScript ativado.
+  </div>
+
+  <main id="app" class="app">
+    <aside class="sidebar" data-visible="true">
+      <div class="brand">
+        <i class="fa-solid fa-wallet"></i>
+        <span>FinanceFam</span>
+      </div>
+
+      <nav class="nav">
+        <button data-view="home" class="nav-btn active"><i class="fa-solid fa-house"></i><span>Início</span></button>
+        <button data-view="transactions" class="nav-btn"><i class="fa-solid fa-list-ul"></i><span>Extrato</span></button>
+        <button data-view="goals" class="nav-btn"><i class="fa-solid fa-bullseye"></i><span>Metas</span></button>
+        <button data-view="savings" class="nav-btn"><i class="fa-solid fa-piggy-bank"></i><span>Cofre</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button id="btn-theme-toggle" class="icon-btn" aria-label="Alternar tema"><i class="fa-solid fa-moon"></i></button>
+        <button id="btn-logout" class="logout">Sair</button>
+      </div>
+    </aside>
+
+    <section class="main">
+      <header class="topbar">
+        <div class="left">
+          <div class="month-switcher">
+            <button id="prev-month" class="small icon-btn-round">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <div id="current-month"></div>
+            <button id="next-month" class="small icon-btn-round">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+        <div class="right">
+          <div id="user-greeting">Olá, <strong id="user-name">Usuário</strong></div>
+        </div>
+      </header>
+      
+      <div class="content-wrapper">
+          <section id="view-home" class="view active">
+            <div class="cards">
+              <div class="card income">
+                <div class="card-title">Entradas</div>
+                <div class="card-value" id="summary-income">R$ 0,00</div>
+              </div>
+              <div class="card expense">
+                <div class="card-title">Saídas</div>
+                <div class="card-value" id="summary-expense">R$ 0,00</div>
+              </div>
+              <div class="card balance">
+                <div class="card-title">Saldo</div>
+                <div class="card-value" id="summary-balance">R$ 0,00</div>
+              </div>
+            </div>
+
+            <section class="chart-panel card">
+              <h3>Gastos por Categoria</h3>
+              <canvas id="chart-expenses" width="600" height="300"></canvas>
+            </section>
+            
+            <section class="latest-transactions-panel">
+                <h3>Últimos Lançamentos</h3>
+                <div id="latest-transaction-list" class="list latest-list"></div>
+            </section>
+            
+          </section>
+
+          <section id="view-transactions" class="view hidden">
+            <header class="list-header">
+              <h3>Extrato Mensal</h3>
+            </header>
+            <div id="transaction-list" class="list"></div>
+          </section>
+
+          <section id="view-goals" class="view hidden">
+            <header class="list-header">
+              <h3>Minhas Metas</h3>
+              <button id="btn-add-goal" class="btn small primary"><i class="fa-solid fa-plus"></i> Nova Meta</button>
+            </header>
+            <div id="goals-list" class="list">
+                <div class="goal-item card">
+                    <h4>Viagem Europa 🇪🇺</h4>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: 15%;"></div>
+                    </div>
+                    <div class="goal-details">
+                        <span>R$ 1.500,00 de R$ 10.000,00</span>
+                        <span class="percentage">15%</span>
+                    </div>
+                </div>
+            </div>
+          </section>
+
+          <section id="view-savings" class="view hidden">
+            <header class="list-header">
+              <h3>Cofre (Reserva de Emergência)</h3>
+            </header>
+            <div class="list">
+              <div class="savings-card card">
+                <div>Total Guardado</div>
+                <div id="savings-total" class="big">R$ 500,00</div>
+                <div class="actions">
+                  <button id="btn-savings-deposit" class="btn primary">Guardar</button>
+                  <button id="btn-savings-withdraw" class="btn outline">Resgatar</button>
+                </div>
+              </div>
+            </div>
+          </section>
+      </div>
+      
+      <button id="btn-open-modal" class="btn fab primary" title="Novo Lançamento">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+      
+    </section>
+  </main>
+
+  <div id="modal-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header class="modal-header">
+        <h3 id="modal-title">Novo Lançamento</h3>
+        <button class="close-modal icon-btn" id="close-modal"><i class="fa-solid fa-xmark"></i></button>
+      </header>
+      <form id="form-add-transaction" class="modal-body">
+        <div class="form-row">
+          <label>Tipo</label>
+          <div class="type-toggle">
+            <label><input type="radio" name="type" value="expense" checked> Gasto</label>
+            <label><input type="radio" name="type" value="income"> Renda</label>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="amount-input">Valor (R$)</label>
+          <input type="number" id="amount-input" name="amount" step="0.01" required placeholder="0.00" />
+        </div>
+
+        <div class="form-row">
+          <label for="category-select">Categoria</label>
+          <select id="category-select" name="category">
+            <option value="Alimentação">Alimentação</option>
+            <option value="Transporte">Transporte / Combustível</option>
+            <option value="Contas Fixas">Contas Fixas (Aluguel, Luz)</option>
+            <option value="Saúde">Saúde / Medicamentos</option>
+            <option value="Lazer">Lazer / Viagens</option>
+            <option value="Investimentos">Investimentos / Poupança</option>
+            <option value="Salário">Salário / Renda Extra</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="description-input">Descrição</label>
+          <input type="text" id="description-input" name="description" placeholder="Ex: Mercado semanal" />
+        </div>
+
+        <div class="form-row row-two">
+          <div>
+            <label for="date-input">Data</label>
+            <input type="date" id="date-input" name="date" required/>
+          </div>
+          <div>
+            <label for="time-input">Hora (Opcional)</label>
+            <input type="time" id="time-input" name="time" />
+          </div>
+        </div>
+
+        <div class="form-row form-actions">
+          <button type="submit" class="btn primary">Salvar Lançamento</button>
+          <button type="button" class="btn outline" id="cancel-modal">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
