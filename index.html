@@ -3,21 +3,39 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>FinanceFam - Meu App Financeiro</title>
+  <title>FinanceFam - App Financeiro</title>
 
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#820ad1" /> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <meta name="theme-color" content="#820ad1" />
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
   <link rel="stylesheet" href="styles.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div class="no-js-warning" style="display:none;padding:1rem;background:#fff4e5;color:#92400e;text-align:center;">
-    Este app funciona melhor com JavaScript ativado.
+  
+  <div id="login-screen" class="login-screen active">
+    <div class="login-card card">
+      <h2><i class="fa-solid fa-wallet"></i> FinanceFam Login</h2>
+      <p>Acesse sua conta para continuar.</p>
+      <div id="login-error" class="login-error hidden">Credenciais inválidas.</div>
+      <form id="login-form">
+        <div class="form-row">
+          <label for="username-input">Usuário:</label>
+          <input type="text" id="username-input" required placeholder="admin ou usuário" />
+        </div>
+        <div class="form-row">
+          <label for="password-input">Senha:</label>
+          <input type="password" id="password-input" required placeholder="12345" />
+        </div>
+        <button type="submit" class="btn primary full-width">Entrar</button>
+      </form>
+    </div>
   </div>
 
-  <main id="app" class="app">
+  <main id="app" class="app hidden">
     <aside class="sidebar" data-visible="true">
       <div class="brand">
         <i class="fa-solid fa-wallet"></i>
@@ -29,6 +47,8 @@
         <button data-view="transactions" class="nav-btn"><i class="fa-solid fa-list-ul"></i><span>Extrato</span></button>
         <button data-view="goals" class="nav-btn"><i class="fa-solid fa-bullseye"></i><span>Metas</span></button>
         <button data-view="savings" class="nav-btn"><i class="fa-solid fa-piggy-bank"></i><span>Cofre</span></button>
+        
+        <button data-view="admin" id="nav-admin" class="nav-btn hidden"><i class="fa-solid fa-screwdriver-wrench"></i><span>Admin</span></button>
       </nav>
 
       <div class="sidebar-bottom">
@@ -41,90 +61,63 @@
       <header class="topbar">
         <div class="left">
           <div class="month-switcher">
-            <button id="prev-month" class="small icon-btn-round">
-                <i class="fa-solid fa-chevron-left"></i>
-            </button>
+            <button id="prev-month" class="small icon-btn-round"><i class="fa-solid fa-chevron-left"></i></button>
             <div id="current-month"></div>
-            <button id="next-month" class="small icon-btn-round">
-                <i class="fa-solid fa-chevron-right"></i>
-            </button>
+            <button id="next-month" class="small icon-btn-round"><i class="fa-solid fa-chevron-right"></i></button>
           </div>
         </div>
         <div class="right">
-          <div id="user-greeting">Olá, <strong id="user-name">Usuário</strong></div>
+          <div id="user-greeting">Olá, <strong id="user-name"></strong></div>
         </div>
       </header>
       
       <div class="content-wrapper">
           <section id="view-home" class="view active">
             <div class="cards">
-              <div class="card income">
-                <div class="card-title">Entradas</div>
-                <div class="card-value" id="summary-income">R$ 0,00</div>
-              </div>
-              <div class="card expense">
-                <div class="card-title">Saídas</div>
-                <div class="card-value" id="summary-expense">R$ 0,00</div>
-              </div>
-              <div class="card balance">
-                <div class="card-title">Saldo</div>
-                <div class="card-value" id="summary-balance">R$ 0,00</div>
-              </div>
+              <div class="card income"><div class="card-title">Entradas</div><div class="card-value" id="summary-income">R$ 0,00</div></div>
+              <div class="card expense"><div class="card-title">Saídas</div><div class="card-value" id="summary-expense">R$ 0,00</div></div>
+              <div class="card balance"><div class="card-title">Saldo</div><div class="card-value" id="summary-balance">R$ 0,00</div></div>
             </div>
-
             <section class="chart-panel card">
               <h3>Gastos por Categoria</h3>
               <canvas id="chart-expenses" width="600" height="300"></canvas>
             </section>
-            
             <section class="latest-transactions-panel">
                 <h3>Últimos Lançamentos</h3>
                 <div id="latest-transaction-list" class="list latest-list"></div>
             </section>
-            
           </section>
 
           <section id="view-transactions" class="view hidden">
-            <header class="list-header">
-              <h3>Extrato Mensal</h3>
-            </header>
+            <header class="list-header"><h3>Extrato Mensal</h3></header>
             <div id="transaction-list" class="list"></div>
           </section>
 
-          <section id="view-goals" class="view hidden">
-            <header class="list-header">
-              <h3>Minhas Metas</h3>
-              <button id="btn-add-goal" class="btn small primary"><i class="fa-solid fa-plus"></i> Nova Meta</button>
-            </header>
-            <div id="goals-list" class="list">
-                <div class="goal-item card">
-                    <h4>Viagem Europa 🇪🇺</h4>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" style="width: 15%;"></div>
-                    </div>
-                    <div class="goal-details">
-                        <span>R$ 1.500,00 de R$ 10.000,00</span>
-                        <span class="percentage">15%</span>
-                    </div>
-                </div>
-            </div>
+          <section id="view-goals" class="view hidden"><header class="list-header"><h3>Minhas Metas</h3></header><p style="padding: 20px;">Funcionalidade de Metas em desenvolvimento.</p></section>
+          <section id="view-savings" class="view hidden"><header class="list-header"><h3>Cofre</h3></header><p style="padding: 20px;">Funcionalidade do Cofre em desenvolvimento.</p></section>
+          
+          <section id="view-admin" class="view hidden">
+              <header class="list-header">
+                <h2>👑 Painel Administrativo</h2>
+              </header>
+              
+              <div class="admin-panel card">
+                  <h3 style="color: var(--purple-nu);">Gerenciar Usuários</h3>
+                  <div id="user-list" class="list admin-user-list">
+                      </div>
+                  <button id="btn-add-user" class="btn primary small"><i class="fa-solid fa-user-plus"></i> Novo Usuário</button>
+                  <p style="margin-top: 15px; font-size: 0.9em; color: #555;">Usuário Admin não pode ser excluído.</p>
+              </div>
+
+              <div class="admin-panel card" style="margin-top: 20px;">
+                  <h3 style="color: var(--purple-nu);">Histórico de Transações Globais</h3>
+                  <div id="global-history" class="list">
+                      </div>
+                  <p style="margin-top: 15px; font-size: 0.9em; color: #555;">Todas as movimentações de todos os usuários.</p>
+              </div>
+
           </section>
 
-          <section id="view-savings" class="view hidden">
-            <header class="list-header">
-              <h3>Cofre (Reserva de Emergência)</h3>
-            </header>
-            <div class="list">
-              <div class="savings-card card">
-                <div>Total Guardado</div>
-                <div id="savings-total" class="big">R$ 500,00</div>
-                <div class="actions">
-                  <button id="btn-savings-deposit" class="btn primary">Guardar</button>
-                  <button id="btn-savings-withdraw" class="btn outline">Resgatar</button>
-                </div>
-              </div>
-            </div>
-          </section>
       </div>
       
       <button id="btn-open-modal" class="btn fab primary" title="Novo Lançamento">
@@ -162,7 +155,6 @@
             <option value="Contas Fixas">Contas Fixas (Aluguel, Luz)</option>
             <option value="Saúde">Saúde / Medicamentos</option>
             <option value="Lazer">Lazer / Viagens</option>
-            <option value="Investimentos">Investimentos / Poupança</option>
             <option value="Salário">Salário / Renda Extra</option>
             <option value="Outros">Outros</option>
           </select>
@@ -183,6 +175,17 @@
             <input type="time" id="time-input" name="time" />
           </div>
         </div>
+        
+        <div class="form-row" id="recurrence-row">
+          <label for="recurrence-select">Repetição de Gasto (Meses)</label>
+          <select id="recurrence-select" name="recurrence">
+            <option value="1">Não se repete</option>
+            <option value="2">2 Meses</option>
+            <option value="3">3 Meses</option>
+            <option value="6">6 Meses</option>
+            <option value="12">12 Meses</option>
+          </select>
+        </div>
 
         <div class="form-row form-actions">
           <button type="submit" class="btn primary">Salvar Lançamento</button>
@@ -191,6 +194,38 @@
       </form>
     </div>
   </div>
+
+  <div id="modal-user-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-user-title">
+        <header class="modal-header">
+            <h3 id="modal-user-title">Criar Novo Usuário</h3>
+            <button class="close-modal icon-btn" data-close-user-modal><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <form id="form-add-user" class="modal-body">
+            <input type="hidden" name="userId" id="edit-user-id">
+            <div class="form-row">
+                <label for="new-username">Nome de Usuário</label>
+                <input type="text" id="new-username" name="newUsername" required placeholder="Ex: JoaoSilva" />
+            </div>
+            <div class="form-row">
+                <label for="new-password">Senha (Padrão 12345)</label>
+                <input type="password" id="new-password" name="newPassword" placeholder="12345" />
+            </div>
+            <div class="form-row">
+                <label>Nível de Acesso</label>
+                <select name="newRole" id="new-role">
+                    <option value="standard">Padrão</option>
+                    <option value="admin">Administrador</option>
+                </select>
+            </div>
+            <div class="form-row form-actions">
+                <button type="submit" class="btn primary" id="btn-save-user">Salvar Usuário</button>
+                <button type="button" class="btn outline" data-close-user-modal>Cancelar</button>
+            </div>
+        </form>
+    </div>
+  </div>
+
 
   <script type="module" src="app.js"></script>
 </body>
