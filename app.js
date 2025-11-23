@@ -1,86 +1,135 @@
 // app.js
+import { addMonths, format, parseISO } from 'date-fns'; // Importações simplificadas para manipulação de data
 
 /**
  * ========================================
  * 1. VARIÁVEIS E ESTADO GLOBAL
  * ========================================
  */
+const STORAGE_KEY = 'financeFamStateV2';
 
-const STORAGE_KEY = 'financeFamState';
-
+// Estrutura do estado global
 const initialAppState = {
-    userName: "Usuário",
-    // Data para controle do mês (Novembro de 2025 para exemplo)
-    currentDate: new Date(2025, 10, 23), 
-    transactions: [],
-    // Dados de exemplo para Metas/Cofre (simplificado)
-    savingsTotal: 500.00, 
-    goals: [
-        { id: 1, name: 'Viagem Europa 🇪🇺', target: 10000.00, saved: 1500.00 },
-    ]
+    // Definição de usuários e roles: admin pode criar, excluir, ver tudo.
+    users: [
+        { id: 'admin', username: 'admin', password: '12345', role: 'admin', lastLogin: null },
+        { id: 'user1', username: 'joao', password: '12345', role: 'standard', lastLogin: null },
+    ],
+    currentUser: null, // Usuário atualmente logado
+    currentDate: new Date(2025, 10, 23), // Mês e ano de exibição
+    transactions: [
+        // Exemplo: Salário do Admin
+        { id: Date.now() + 1, type: 'income', amount: 3000.00, category: 'Salário', description: 'Renda Mensal', date: '2025-11-05', timestamp: Date.parse('2025-11-05T09:00:00'), userId: 'admin' },
+        // Exemplo: Gasto do Usuário Padrão
+        { id: Date.now() + 2, type: 'expense', amount: 150.00, category: 'Alimentação', description: 'Restaurante', date: '2025-11-10', timestamp: Date.parse('2025-11-10T19:00:00'), userId: 'user1' },
+    ],
 };
 
-// Carrega o estado do localStorage ou usa o inicial
 let appState = loadState();
 
 /**
  * ========================================
- * 2. FUNÇÕES AUXILIARES
+ * 2. PERSISTÊNCIA E UTILITÁRIOS
  * ========================================
  */
+
+// Salva o estado atual no LocalStorage
+function saveState() {
+    // Remove o currentUser antes de salvar (para não expor a sessão)
+    const stateToSave = { ...appState, currentUser: null };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+}
+
+// Carrega o estado do LocalStorage ou usa o inicial
+function loadState() {
+    const serializedState = localStorage.getItem(STORAGE_KEY);
+    if (serializedState === null) {
+        return initialAppState;
+    }
+    const loadedState = JSON.parse(serializedState);
+    
+    // Assegura que currentDate seja um objeto Date
+    loadedState.currentDate = new Date(loadedState.currentDate);
+    
+    // Garante que o usuário admin padrão exista
+    if (!loadedState.users.find(u => u.id === 'admin')) {
+        loadedState.users.push(initialAppState.users.find(u => u.id === 'admin'));
+    }
+    
+    return loadedState;
+}
 
 // Função para formatar números para moeda BRL (R$)
 const formatCurrency = (value) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-// Função para salvar o estado no LocalStorage
-function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-}
+// Formata a data para exibição na lista
+const formatDate = (dateString) => {
+    return format(parseISO(dateString), 'dd/MM/yyyy');
+};
 
-// Função para carregar o estado do LocalStorage
-function loadState() {
-    const serializedState = localStorage.getItem(STORAGE_KEY);
-    if (serializedState === null) {
-        // Se não houver dados, inicializa com alguns exemplos
-        initialAppState.transactions = [
-            { id: 1, type: 'income', amount: 3000.00, category: 'Salário', description: 'Renda Mensal', date: '2025-11-05', timestamp: Date.parse('2025-11-05T09:00:00') },
-            { id: 2, type: 'expense', amount: 120.00, category: 'Alimentação', description: 'Mercado Semanal', date: '2025-11-12', timestamp: Date.parse('2025-11-12T18:30:00') },
-            { id: 3, type: 'expense', amount: 1200.00, category: 'Contas Fixas', description: 'Aluguel', date: '2025-11-01', timestamp: Date.parse('2025-11-01T10:00:00') },
-            { id: 4, type: 'income', amount: 500.00, category: 'Renda Extra', description: 'Freelance', date: '2025-11-20', timestamp: Date.parse('2025-11-20T14:00:00') },
-        ];
-        // Assegura que currentDate seja um objeto Date
-        initialAppState.currentDate = new Date(initialAppState.currentDate); 
-        return initialAppState;
+/**
+ * ========================================
+ * 3. LÓGICA DE AUTENTICAÇÃO
+ * ========================================
+ */
+
+function handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('username-input').value;
+    const password = document.getElementById('password-input').value;
+    const errorDisplay = document.getElementById('login-error');
+
+    const user = appState.users.find(u => u.username === username && u.password === password);
+
+    if (user) {
+        appState.currentUser = user;
+        user.lastLogin = new Date().toISOString();
+        saveState();
+        
+        // Esconde login e mostra o app
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        
+        // Inicializa a interface do usuário logado
+        initializeAppUI();
+    } else {
+        errorDisplay.classList.remove('hidden');
+        setTimeout(() => errorDisplay.classList.add('hidden'), 3000);
     }
-    const loadedState = JSON.parse(serializedState);
-    // Assegura que currentDate seja um objeto Date
-    loadedState.currentDate = new Date(loadedState.currentDate);
-    return loadedState;
+}
+
+function handleLogout() {
+    appState.currentUser = null;
+    saveState();
+    window.location.reload(); // Recarrega a página para voltar à tela de login
 }
 
 /**
  * ========================================
- * 3. LÓGICA DE CÁLCULO E RENDERIZAÇÃO
+ * 4. LÓGICA DE TRANSAÇÕES
  * ========================================
  */
 
-// Referência global para o gráfico
-let expensesChart;
-
-/**
- * Filtra transações pelo mês e ano atual e atualiza os cartões de resumo.
- */
-function updateSummary() {
+function getTransactionsForCurrentUserMonth() {
     const currentMonth = appState.currentDate.getMonth();
     const currentYear = appState.currentDate.getFullYear();
+    const userId = appState.currentUser.id;
 
-    const filteredTransactions = appState.transactions.filter(t => {
-        const tDate = new Date(t.date);
-        return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
-    });
+    return appState.transactions
+        .filter(t => t.userId === userId) // Filtra apenas as do usuário logado
+        .filter(t => {
+            const tDate = parseISO(t.date);
+            return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
+        })
+        .sort((a, b) => b.timestamp - a.timestamp);
+}
 
+// Função principal de cálculo e atualização da UI
+function updateSummary() {
+    const filteredTransactions = getTransactionsForCurrentUserMonth();
+    
     let income = 0;
     let expense = 0;
 
@@ -94,143 +143,277 @@ function updateSummary() {
 
     const balance = income - expense;
 
-    // Atualiza o DOM
     document.getElementById('summary-income').textContent = formatCurrency(income);
     document.getElementById('summary-expense').textContent = formatCurrency(expense);
     document.getElementById('summary-balance').textContent = formatCurrency(balance);
     
-    // Atualiza o gráfico e as listas
     updateExpenseChart(filteredTransactions);
     renderTransactionList(filteredTransactions);
 }
 
 /**
- * Atualiza o display do mês na topbar.
+ * Gerencia a lógica de repetição de gastos/rendas e adiciona ao estado.
  */
-function updateMonthDisplay() {
-    const monthYear = appState.currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    document.getElementById('current-month').textContent = 
-        monthYear.charAt(0).toUpperCase() + monthYear.slice(1); // Capitaliza
+function addTransaction(data) {
+    const amount = parseFloat(data.get('amount'));
+    const recurrence = parseInt(data.get('recurrence'), 10);
+    const dateInput = data.get('date');
+    const timeInput = data.get('time') || '12:00';
+    
+    // A transação original é sempre adicionada
+    const baseTransaction = {
+        id: Date.now(),
+        userId: appState.currentUser.id,
+        type: data.get('type'),
+        amount: amount,
+        category: data.get('category'),
+        description: data.get('description'),
+        date: dateInput,
+        timestamp: Date.parse(`${dateInput}T${timeInput}`),
+        recurrence: recurrence,
+    };
+    appState.transactions.push(baseTransaction);
+
+    // Se houver repetição (maior que 1), adiciona as futuras
+    if (recurrence > 1) {
+        let currentDate = parseISO(dateInput);
+        for (let i = 1; i < recurrence; i++) {
+            currentDate = addMonths(currentDate, 1);
+            
+            const repeatedTransaction = {
+                ...baseTransaction,
+                id: Date.now() + i,
+                date: format(currentDate, 'yyyy-MM-dd'),
+                timestamp: currentDate.getTime(),
+                isRecurring: true, // Marca como recorrente
+                recurrenceIndex: i + 1,
+            };
+            appState.transactions.push(repeatedTransaction);
+        }
+    }
+    
+    saveState();
+    updateSummary();
 }
 
 /**
- * Renderiza a lista de transações (Extrato e Últimos Lançamentos).
- * @param {Array} transactions - Lista de transações a serem exibidas.
+ * Exclui uma transação do estado.
  */
+function deleteTransaction(id) {
+    appState.transactions = appState.transactions.filter(t => t.id !== id);
+    saveState();
+    updateSummary();
+    if (appState.currentUser.role === 'admin') {
+        renderAdminView();
+    }
+}
+
+/**
+ * ========================================
+ * 5. LÓGICA DE RENDERIZAÇÃO
+ * ========================================
+ */
+
+// Inicializa a UI após o login
+function initializeAppUI() {
+    document.getElementById('user-name').textContent = appState.currentUser.username;
+    
+    // Mostra/Esconde a aba Admin
+    const adminNav = document.getElementById('nav-admin');
+    if (appState.currentUser.role === 'admin') {
+        adminNav.classList.remove('hidden');
+    } else {
+        adminNav.classList.add('hidden');
+    }
+    
+    // Atualiza o estado da aplicação
+    updateMonthDisplay();
+    updateSummary();
+}
+
+function updateMonthDisplay() {
+    const monthYear = appState.currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    document.getElementById('current-month').textContent = 
+        monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
+}
+
 function renderTransactionList(transactions) {
     const listContainer = document.getElementById('transaction-list');
     const latestListContainer = document.getElementById('latest-transaction-list');
     listContainer.innerHTML = '';
     latestListContainer.innerHTML = '';
 
-    // Ordena pela data/hora mais recente
-    const sortedTransactions = [...transactions].sort((a, b) => b.timestamp - a.timestamp);
-
-    // Renderiza o Extrato Completo
-    sortedTransactions.forEach(t => {
-        listContainer.innerHTML += createTransactionHTML(t);
+    // Extrato Completo (com botão de exclusão)
+    transactions.forEach(t => {
+        listContainer.innerHTML += createTransactionHTML(t, true);
     });
     
-    // Renderiza os 5 Últimos Lançamentos (Home View)
-    sortedTransactions.slice(0, 5).forEach(t => {
-        latestListContainer.innerHTML += createTransactionHTML(t);
+    // Últimos Lançamentos (Home View, sem botão de exclusão)
+    transactions.slice(0, 5).forEach(t => {
+        latestListContainer.innerHTML += createTransactionHTML(t, false);
     });
     
-    // Se a lista estiver vazia
     if (transactions.length === 0) {
         listContainer.innerHTML = '<p style="text-align:center; color:#999; padding:20px;">Nenhum lançamento neste mês.</p>';
     }
+
+    // Adiciona event listeners para exclusão
+    document.querySelectorAll('.btn-delete-transaction').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = parseInt(e.target.closest('button').dataset.id);
+            if (confirm("Tem certeza que deseja excluir esta transação?")) {
+                deleteTransaction(id);
+            }
+        });
+    });
 }
 
-/**
- * Gera o HTML para uma única transação.
- */
-function createTransactionHTML(t) {
+function createTransactionHTML(t, showDeleteButton) {
     const typeClass = t.type;
     const sign = t.type === 'income' ? '+' : '-';
-    const date = new Date(t.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    const date = formatDate(t.date);
+
+    const deleteButton = showDeleteButton ? 
+        `<button class="btn-delete-transaction icon-btn" data-id="${t.id}" title="Excluir"><i class="fa-solid fa-trash-can" data-id="${t.id}"></i></button>` : '';
 
     return `
         <div class="transaction-item ${typeClass}">
             <div class="transaction-details">
                 <h4>${t.description || t.category}</h4>
-                <span>${t.category} - ${date}</span>
+                <span>${t.category} - ${date} ${t.isRecurring ? '(Recorrente)' : ''}</span>
             </div>
-            <div class="transaction-amount ${typeClass}">
-                ${sign} ${formatCurrency(t.amount)}
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="transaction-amount ${typeClass}">
+                    ${sign} ${formatCurrency(t.amount)}
+                </div>
+                ${deleteButton}
             </div>
         </div>
     `;
 }
 
 /**
- * Inicializa ou atualiza o gráfico de despesas por categoria.
+ * Lógica da Tela Admin
  */
-function updateExpenseChart(transactions) {
-    const expenseTransactions = transactions.filter(t => t.type === 'expense');
-    
-    const categoryTotals = expenseTransactions.reduce((acc, t) => {
-        acc[t.category] = (acc[t.category] || 0) + t.amount;
-        return acc;
-    }, {});
+function renderAdminView() {
+    if (appState.currentUser.role !== 'admin') return;
 
-    const labels = Object.keys(categoryTotals);
-    const data = Object.values(categoryTotals);
+    // --- Renderizar Lista de Usuários ---
+    const userList = document.getElementById('user-list');
+    userList.innerHTML = '';
     
-    // Destrói a instância anterior se existir
-    if (expensesChart) {
-        expensesChart.destroy();
-    }
+    appState.users.forEach(user => {
+        const lastLoginText = user.lastLogin ? format(parseISO(user.lastLogin), 'dd/MM/yyyy HH:mm') : 'Nunca';
+        const deleteBtn = user.id !== 'admin' ? 
+            `<button class="btn outline small btn-delete-user" data-id="${user.id}">Excluir</button>` : '';
+            
+        userList.innerHTML += `
+            <div class="user-item">
+                <div class="user-info">
+                    <strong>${user.username}</strong> (${user.role === 'admin' ? 'Administrador' : 'Padrão'})
+                    <span>Último Login: ${lastLoginText}</span>
+                </div>
+                <div class="actions">
+                    <button class="btn primary small btn-edit-user" data-id="${user.id}">Editar</button>
+                    ${deleteBtn}
+                </div>
+            </div>
+        `;
+    });
 
-    const ctx = document.getElementById('chart-expenses').getContext('2d');
-    expensesChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: [
-                    '#ff6384', '#36a2eb', '#cc65fe', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40'
-                ],
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right',
-                },
-                title: {
-                    display: false,
-                }
+    // Adiciona listeners para excluir usuários
+    document.querySelectorAll('.btn-delete-user').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
+            if (confirm(`Tem certeza que deseja excluir o usuário ${id}?`)) {
+                deleteUser(id);
             }
-        }
+        });
+    });
+    
+    // Adiciona listeners para editar usuários
+    document.querySelectorAll('.btn-edit-user').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
+            openUserModal(id);
+        });
+    });
+
+
+    // --- Renderizar Histórico Global ---
+    const globalHistory = document.getElementById('global-history');
+    globalHistory.innerHTML = '';
+
+    // Transações de todos os usuários, ordenadas
+    const allTransactions = [...appState.transactions].sort((a, b) => b.timestamp - a.timestamp);
+    
+    allTransactions.forEach(t => {
+        const owner = appState.users.find(u => u.id === t.userId)?.username || 'Desconhecido';
+        const typeClass = t.type;
+        const sign = t.type === 'income' ? '+' : '-';
+        const date = formatDate(t.date);
+
+        globalHistory.innerHTML += `
+            <div class="transaction-item ${typeClass}" style="border-left-width: 10px;">
+                <div class="transaction-details">
+                    <h4>${t.description || t.category} (${owner})</h4>
+                    <span>${t.category} - ${date}</span>
+                </div>
+                <div class="transaction-amount ${typeClass}">
+                    ${sign} ${formatCurrency(t.amount)}
+                </div>
+            </div>
+        `;
     });
 }
 
-/**
- * ========================================
- * 4. INICIALIZAÇÃO E EVENT LISTENERS
- * ========================================
- */
-
-function initializeApp() {
-    // 1. Atualiza dados iniciais
-    document.getElementById('user-name').textContent = appState.userName;
-    updateMonthDisplay();
-    updateSummary();
-
-    // 2. Setup dos Event Listeners (UI)
-    setupNavigation();
-    setupMonthSwitchers();
-    setupModal();
-    setupTransactionForm();
+function deleteUser(userId) {
+    appState.users = appState.users.filter(u => u.id !== userId);
+    // Remove também as transações do usuário excluído
+    appState.transactions = appState.transactions.filter(t => t.userId !== userId); 
+    saveState();
+    renderAdminView();
 }
 
+// Abre o modal de usuário (para criação ou edição)
+function openUserModal(userId = null) {
+    const modal = document.getElementById('modal-user-overlay');
+    const form = document.getElementById('form-add-user');
+    const title = document.getElementById('modal-user-title');
+    
+    if (userId) {
+        // Modo Edição
+        const user = appState.users.find(u => u.id === userId);
+        title.textContent = `Editar Usuário: ${user.username}`;
+        form.querySelector('#edit-user-id').value = user.id;
+        form.querySelector('#new-username').value = user.username;
+        form.querySelector('#new-password').placeholder = 'Deixe vazio para manter a senha';
+        form.querySelector('#new-role').value = user.role;
+        // Impedir que o admin mude sua própria role para padrão
+        if (user.id === 'admin') {
+            form.querySelector('#new-role').disabled = true;
+        } else {
+            form.querySelector('#new-role').disabled = false;
+        }
+    } else {
+        // Modo Criação
+        title.textContent = 'Criar Novo Usuário';
+        form.reset();
+        form.querySelector('#edit-user-id').value = '';
+        form.querySelector('#new-password').placeholder = '12345';
+        form.querySelector('#new-role').disabled = false;
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+
 /**
- * Configura a troca de views (navegação lateral).
+ * ========================================
+ * 6. SETUP E EVENT LISTENERS
+ * ========================================
  */
+
 function setupNavigation() {
     const navButtons = document.querySelectorAll('.nav-btn');
     const views = document.querySelectorAll('.view');
@@ -239,109 +422,115 @@ function setupNavigation() {
         button.addEventListener('click', (e) => {
             const targetView = button.dataset.view;
 
-            // Remove 'active' de todos os botões e views
             navButtons.forEach(btn => btn.classList.remove('active'));
             views.forEach(view => view.classList.add('hidden'));
             views.forEach(view => view.classList.remove('active'));
 
-            // Adiciona 'active' ao botão e view corretos
             button.classList.add('active');
             document.getElementById(`view-${targetView}`).classList.remove('hidden');
             document.getElementById(`view-${targetView}`).classList.add('active');
+
+            // Lógica especial para a View Admin
+            if (targetView === 'admin' && appState.currentUser.role === 'admin') {
+                renderAdminView();
+            } else if (targetView === 'home' || targetView === 'transactions') {
+                updateSummary();
+            }
         });
     });
 }
 
-/**
- * Configura os botões de troca de mês.
- */
-function setupMonthSwitchers() {
-    // Botão Mês Anterior
+function setupEventListeners() {
+    // Login
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+    document.getElementById('btn-logout').addEventListener('click', handleLogout);
+
+    // Troca de Mês
     document.getElementById('prev-month').addEventListener('click', () => {
-        appState.currentDate.setMonth(appState.currentDate.getMonth() - 1);
+        appState.currentDate = addMonths(appState.currentDate, -1);
         updateMonthDisplay();
-        updateSummary(); // Recalcula e redesenha
-    });
-
-    // Botão Próximo Mês
-    document.getElementById('next-month').addEventListener('click', () => {
-        appState.currentDate.setMonth(appState.currentDate.getMonth() + 1);
-        updateMonthDisplay();
-        updateSummary(); // Recalcula e redesenha
-    });
-}
-
-/**
- * Configura o modal de novo lançamento.
- */
-function setupModal() {
-    const modalOverlay = document.getElementById('modal-overlay');
-    const openModalBtn = document.getElementById('btn-open-modal');
-    const closeModalBtn = document.getElementById('close-modal');
-    const cancelModalBtn = document.getElementById('cancel-modal');
-
-    const openModal = () => modalOverlay.classList.remove('hidden');
-    const closeModal = () => modalOverlay.classList.add('hidden');
-
-    openModalBtn.addEventListener('click', openModal);
-    closeModalBtn.addEventListener('click', closeModal);
-    cancelModalBtn.addEventListener('click', closeModal);
-    
-    // Fechar ao clicar fora do modal
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) {
-            closeModal();
-        }
-    });
-}
-
-/**
- * Configura o formulário para adicionar transação.
- */
-function setupTransactionForm() {
-    const form = document.getElementById('form-add-transaction');
-
-    // Preenche a data com a data atual por padrão
-    const today = new Date().toISOString().split('T')[0];
-    form.querySelector('input[name="date"]').value = today;
-
-    form.addEventListener('submit', function(event) {
-        event.preventDefault();
-        
-        const formData = new FormData(this);
-        const dateInput = formData.get('date');
-        const timeInput = formData.get('time') || '12:00:00'; // Default time
-
-        const newTransaction = {
-            id: Date.now(),
-            type: formData.get('type'),
-            amount: parseFloat(formData.get('amount')),
-            category: formData.get('category'),
-            description: formData.get('description'),
-            date: dateInput,
-            // Cria um timestamp unificado para ordenação
-            timestamp: Date.parse(`${dateInput}T${timeInput}`), 
-        };
-
-        appState.transactions.push(newTransaction);
-        
-        // Salva e atualiza a UI
-        saveState();
         updateSummary();
-        
-        // Reseta e fecha o modal
+    });
+    document.getElementById('next-month').addEventListener('click', () => {
+        appState.currentDate = addMonths(appState.currentDate, 1);
+        updateMonthDisplay();
+        updateSummary();
+    });
+
+    // Modal de Transação
+    const modalOverlay = document.getElementById('modal-overlay');
+    document.getElementById('btn-open-modal').addEventListener('click', () => modalOverlay.classList.remove('hidden'));
+    document.getElementById('close-modal').addEventListener('click', () => modalOverlay.classList.add('hidden'));
+    document.getElementById('cancel-modal').addEventListener('click', () => modalOverlay.classList.add('hidden'));
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
+    });
+
+    // Form de Nova Transação
+    document.getElementById('form-add-transaction').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+        addTransaction(formData);
         this.reset();
-        document.getElementById('modal-overlay').classList.add('hidden');
-        
-        // Coloca a data atual novamente para a próxima vez
-        form.querySelector('input[name="date"]').value = today; 
+        modalOverlay.classList.add('hidden');
+        // Preenche a data novamente
+        this.querySelector('input[name="date"]').value = format(new Date(), 'yyyy-MM-dd');
+    });
+
+    // Admin Modals
+    const userModalOverlay = document.getElementById('modal-user-overlay');
+    document.getElementById('btn-add-user').addEventListener('click', () => openUserModal(null));
+    document.querySelectorAll('[data-close-user-modal]').forEach(btn => {
+        btn.addEventListener('click', () => userModalOverlay.classList.add('hidden'));
+    });
+    userModalOverlay.addEventListener('click', (e) => {
+        if (e.target === userModalOverlay) userModalOverlay.classList.add('hidden');
+    });
+    
+    // Form de Adicionar/Editar Usuário
+    document.getElementById('form-add-user').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const userId = formData.get('userId');
+
+        if (userId) { // Edição
+            const user = appState.users.find(u => u.id === userId);
+            user.username = formData.get('newUsername');
+            if (formData.get('newPassword')) {
+                user.password = formData.get('newPassword');
+            }
+            if (user.id !== 'admin') { // Não deixa alterar a role do admin
+                user.role = formData.get('newRole');
+            }
+        } else { // Criação
+            const newId = `user${Date.now()}`;
+            const newUser = {
+                id: newId,
+                username: formData.get('newUsername'),
+                password: formData.get('newPassword') || '12345',
+                role: formData.get('newRole'),
+                lastLogin: null,
+            };
+            appState.users.push(newUser);
+        }
+
+        saveState();
+        userModalOverlay.classList.add('hidden');
+        renderAdminView(); // Atualiza a lista na tela Admin
     });
 }
 
+// Inicialização Principal
+document.addEventListener('DOMContentLoaded', () => {
+    // Preenche a data do formulário inicialmente
+    document.querySelector('#form-add-transaction input[name="date"]').value = format(new Date(), 'yyyy-MM-dd');
+    
+    setupEventListeners();
 
-// Chama a função de inicialização quando o DOM estiver pronto
-document.addEventListener('DOMContentLoaded', initializeApp);
-
-// Exporta (apenas se fosse um módulo, mas mantém a estrutura)
-window.appState = appState;
-window.updateSummary = updateSummary;
+    // Se houver um usuário logado (simulação de sessão), inicia o app
+    // Nota: Em um ambiente real, isso seria feito no servidor.
+    // Vamos garantir que a tela de login esteja sempre ativa ao carregar.
+    if (appState.currentUser) {
+        handleLogout(); // Garante que a sessão anterior seja limpa ao recarregar
+    }
+});
