@@ -1,5 +1,4 @@
 // app.js
-import { addMonths, format, parseISO } from 'date-fns'; // Importações simplificadas para manipulação de data
 
 /**
  * ========================================
@@ -8,19 +7,16 @@ import { addMonths, format, parseISO } from 'date-fns'; // Importações simplif
  */
 const STORAGE_KEY = 'financeFamStateV2';
 
-// Estrutura do estado global
+// Estrutura do estado global inicial
 const initialAppState = {
-    // Definição de usuários e roles: admin pode criar, excluir, ver tudo.
     users: [
         { id: 'admin', username: 'admin', password: '12345', role: 'admin', lastLogin: null },
         { id: 'user1', username: 'joao', password: '12345', role: 'standard', lastLogin: null },
     ],
-    currentUser: null, // Usuário atualmente logado
-    currentDate: new Date(2025, 10, 23), // Mês e ano de exibição
+    currentUser: null, 
+    currentDate: new Date(2025, 10, 23),
     transactions: [
-        // Exemplo: Salário do Admin
         { id: Date.now() + 1, type: 'income', amount: 3000.00, category: 'Salário', description: 'Renda Mensal', date: '2025-11-05', timestamp: Date.parse('2025-11-05T09:00:00'), userId: 'admin' },
-        // Exemplo: Gasto do Usuário Padrão
         { id: Date.now() + 2, type: 'expense', amount: 150.00, category: 'Alimentação', description: 'Restaurante', date: '2025-11-10', timestamp: Date.parse('2025-11-10T19:00:00'), userId: 'user1' },
     ],
 };
@@ -33,25 +29,33 @@ let appState = loadState();
  * ========================================
  */
 
-// Salva o estado atual no LocalStorage
+// Função para salvar o estado no LocalStorage
 function saveState() {
-    // Remove o currentUser antes de salvar (para não expor a sessão)
-    const stateToSave = { ...appState, currentUser: null };
+    // Salva o ID do usuário logado para simular a sessão
+    const stateToSave = { ...appState, currentUserId: appState.currentUser ? appState.currentUser.id : null };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
 }
 
-// Carrega o estado do LocalStorage ou usa o inicial
+// Função para carregar o estado do LocalStorage e restaurar a sessão
 function loadState() {
     const serializedState = localStorage.getItem(STORAGE_KEY);
     if (serializedState === null) {
         return initialAppState;
     }
+    
     const loadedState = JSON.parse(serializedState);
+    
+    // RESTAURAÇÃO DA SESSÃO: Encontra o usuário a partir do ID salvo
+    if (loadedState.currentUserId) {
+        loadedState.currentUser = loadedState.users.find(u => u.id === loadedState.currentUserId) || null;
+    } else {
+        loadedState.currentUser = null;
+    }
     
     // Assegura que currentDate seja um objeto Date
     loadedState.currentDate = new Date(loadedState.currentDate);
     
-    // Garante que o usuário admin padrão exista
+    // Garante que o admin padrão exista
     if (!loadedState.users.find(u => u.id === 'admin')) {
         loadedState.users.push(initialAppState.users.find(u => u.id === 'admin'));
     }
@@ -64,14 +68,15 @@ const formatCurrency = (value) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-// Formata a data para exibição na lista
+// Formata a data para exibição na lista usando dateFns global
 const formatDate = (dateString) => {
-    return format(parseISO(dateString), 'dd/MM/yyyy');
+    // Agora usando o objeto global 'dateFns'
+    return dateFns.format(dateFns.parseISO(dateString), 'dd/MM/yyyy');
 };
 
 /**
  * ========================================
- * 3. LÓGICA DE AUTENTICAÇÃO
+ * 3. LÓGICA DE AUTENTICAÇÃO E RENDERIZAÇÃO INICIAL
  * ========================================
  */
 
@@ -86,6 +91,8 @@ function handleLogin(e) {
     if (user) {
         appState.currentUser = user;
         user.lastLogin = new Date().toISOString();
+        
+        // CORREÇÃO CRÍTICA: Salvar o estado ANTES de atualizar a UI
         saveState();
         
         // Esconde login e mostra o app
@@ -94,6 +101,7 @@ function handleLogin(e) {
         
         // Inicializa a interface do usuário logado
         initializeAppUI();
+        
     } else {
         errorDisplay.classList.remove('hidden');
         setTimeout(() => errorDisplay.classList.add('hidden'), 3000);
@@ -103,7 +111,24 @@ function handleLogin(e) {
 function handleLogout() {
     appState.currentUser = null;
     saveState();
-    window.location.reload(); // Recarrega a página para voltar à tela de login
+    
+    // Limpar e retornar à tela de login
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+}
+
+
+function checkAuthAndInit() {
+    if (appState.currentUser) {
+        // Usuário encontrado na sessão (localStorage)
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        initializeAppUI();
+    } else {
+        // Sem sessão, mostra a tela de login
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('app').classList.add('hidden');
+    }
 }
 
 /**
@@ -113,6 +138,8 @@ function handleLogout() {
  */
 
 function getTransactionsForCurrentUserMonth() {
+    if (!appState.currentUser) return [];
+
     const currentMonth = appState.currentDate.getMonth();
     const currentYear = appState.currentDate.getFullYear();
     const userId = appState.currentUser.id;
@@ -120,7 +147,7 @@ function getTransactionsForCurrentUserMonth() {
     return appState.transactions
         .filter(t => t.userId === userId) // Filtra apenas as do usuário logado
         .filter(t => {
-            const tDate = parseISO(t.date);
+            const tDate = dateFns.parseISO(t.date);
             return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
         })
         .sort((a, b) => b.timestamp - a.timestamp);
@@ -160,7 +187,6 @@ function addTransaction(data) {
     const dateInput = data.get('date');
     const timeInput = data.get('time') || '12:00';
     
-    // A transação original é sempre adicionada
     const baseTransaction = {
         id: Date.now(),
         userId: appState.currentUser.id,
@@ -174,18 +200,18 @@ function addTransaction(data) {
     };
     appState.transactions.push(baseTransaction);
 
-    // Se houver repetição (maior que 1), adiciona as futuras
+    // Adiciona as transações recorrentes
     if (recurrence > 1) {
-        let currentDate = parseISO(dateInput);
+        let currentDate = dateFns.parseISO(dateInput);
         for (let i = 1; i < recurrence; i++) {
-            currentDate = addMonths(currentDate, 1);
+            currentDate = dateFns.addMonths(currentDate, 1);
             
             const repeatedTransaction = {
                 ...baseTransaction,
                 id: Date.now() + i,
-                date: format(currentDate, 'yyyy-MM-dd'),
+                date: dateFns.format(currentDate, 'yyyy-MM-dd'),
                 timestamp: currentDate.getTime(),
-                isRecurring: true, // Marca como recorrente
+                isRecurring: true, 
                 recurrenceIndex: i + 1,
             };
             appState.transactions.push(repeatedTransaction);
@@ -214,7 +240,6 @@ function deleteTransaction(id) {
  * ========================================
  */
 
-// Inicializa a UI após o login
 function initializeAppUI() {
     document.getElementById('user-name').textContent = appState.currentUser.username;
     
@@ -303,7 +328,7 @@ function renderAdminView() {
     userList.innerHTML = '';
     
     appState.users.forEach(user => {
-        const lastLoginText = user.lastLogin ? format(parseISO(user.lastLogin), 'dd/MM/yyyy HH:mm') : 'Nunca';
+        const lastLoginText = user.lastLogin ? dateFns.format(dateFns.parseISO(user.lastLogin), 'dd/MM/yyyy HH:mm') : 'Nunca';
         const deleteBtn = user.id !== 'admin' ? 
             `<button class="btn outline small btn-delete-user" data-id="${user.id}">Excluir</button>` : '';
             
@@ -324,7 +349,7 @@ function renderAdminView() {
     // Adiciona listeners para excluir usuários
     document.querySelectorAll('.btn-delete-user').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const id = e.target.dataset.id;
+            const id = e.target.closest('button').dataset.id;
             if (confirm(`Tem certeza que deseja excluir o usuário ${id}?`)) {
                 deleteUser(id);
             }
@@ -334,7 +359,7 @@ function renderAdminView() {
     // Adiciona listeners para editar usuários
     document.querySelectorAll('.btn-edit-user').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const id = e.target.dataset.id;
+            const id = e.target.closest('button').dataset.id;
             openUserModal(id);
         });
     });
@@ -369,34 +394,30 @@ function renderAdminView() {
 
 function deleteUser(userId) {
     appState.users = appState.users.filter(u => u.id !== userId);
-    // Remove também as transações do usuário excluído
     appState.transactions = appState.transactions.filter(t => t.userId !== userId); 
     saveState();
     renderAdminView();
 }
 
-// Abre o modal de usuário (para criação ou edição)
 function openUserModal(userId = null) {
+    // ... (Mantém a lógica de abrir/preencher modal de usuário)
     const modal = document.getElementById('modal-user-overlay');
     const form = document.getElementById('form-add-user');
     const title = document.getElementById('modal-user-title');
     
     if (userId) {
-        // Modo Edição
         const user = appState.users.find(u => u.id === userId);
         title.textContent = `Editar Usuário: ${user.username}`;
         form.querySelector('#edit-user-id').value = user.id;
         form.querySelector('#new-username').value = user.username;
         form.querySelector('#new-password').placeholder = 'Deixe vazio para manter a senha';
         form.querySelector('#new-role').value = user.role;
-        // Impedir que o admin mude sua própria role para padrão
         if (user.id === 'admin') {
             form.querySelector('#new-role').disabled = true;
         } else {
             form.querySelector('#new-role').disabled = false;
         }
     } else {
-        // Modo Criação
         title.textContent = 'Criar Novo Usuário';
         form.reset();
         form.querySelector('#edit-user-id').value = '';
@@ -430,7 +451,6 @@ function setupNavigation() {
             document.getElementById(`view-${targetView}`).classList.remove('hidden');
             document.getElementById(`view-${targetView}`).classList.add('active');
 
-            // Lógica especial para a View Admin
             if (targetView === 'admin' && appState.currentUser.role === 'admin') {
                 renderAdminView();
             } else if (targetView === 'home' || targetView === 'transactions') {
@@ -447,12 +467,12 @@ function setupEventListeners() {
 
     // Troca de Mês
     document.getElementById('prev-month').addEventListener('click', () => {
-        appState.currentDate = addMonths(appState.currentDate, -1);
+        appState.currentDate = dateFns.addMonths(appState.currentDate, -1);
         updateMonthDisplay();
         updateSummary();
     });
     document.getElementById('next-month').addEventListener('click', () => {
-        appState.currentDate = addMonths(appState.currentDate, 1);
+        appState.currentDate = dateFns.addMonths(appState.currentDate, 1);
         updateMonthDisplay();
         updateSummary();
     });
@@ -473,8 +493,7 @@ function setupEventListeners() {
         addTransaction(formData);
         this.reset();
         modalOverlay.classList.add('hidden');
-        // Preenche a data novamente
-        this.querySelector('input[name="date"]').value = format(new Date(), 'yyyy-MM-dd');
+        this.querySelector('input[name="date"]').value = dateFns.format(new Date(), 'yyyy-MM-dd');
     });
 
     // Admin Modals
@@ -499,7 +518,7 @@ function setupEventListeners() {
             if (formData.get('newPassword')) {
                 user.password = formData.get('newPassword');
             }
-            if (user.id !== 'admin') { // Não deixa alterar a role do admin
+            if (user.id !== 'admin') { 
                 user.role = formData.get('newRole');
             }
         } else { // Criação
@@ -516,21 +535,15 @@ function setupEventListeners() {
 
         saveState();
         userModalOverlay.classList.add('hidden');
-        renderAdminView(); // Atualiza a lista na tela Admin
+        renderAdminView();
     });
 }
 
 // Inicialização Principal
 document.addEventListener('DOMContentLoaded', () => {
-    // Preenche a data do formulário inicialmente
-    document.querySelector('#form-add-transaction input[name="date"]').value = format(new Date(), 'yyyy-MM-dd');
-    
     setupEventListeners();
-
-    // Se houver um usuário logado (simulação de sessão), inicia o app
-    // Nota: Em um ambiente real, isso seria feito no servidor.
-    // Vamos garantir que a tela de login esteja sempre ativa ao carregar.
-    if (appState.currentUser) {
-        handleLogout(); // Garante que a sessão anterior seja limpa ao recarregar
-    }
+    checkAuthAndInit(); // Checa se há uma sessão ativa e inicia o app
+    
+    // Preenche a data do formulário inicialmente
+    document.querySelector('#form-add-transaction input[name="date"]').value = dateFns.format(new Date(), 'yyyy-MM-dd');
 });
