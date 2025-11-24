@@ -29,14 +29,19 @@ let appState = loadState();
  * ========================================
  */
 
-// Função para salvar o estado no LocalStorage
+// Salva o estado atual no LocalStorage
 function saveState() {
     // Salva o ID do usuário logado para simular a sessão
-    const stateToSave = { ...appState, currentUserId: appState.currentUser ? appState.currentUser.id : null };
+    const stateToSave = { 
+        ...appState, 
+        currentUserId: appState.currentUser ? appState.currentUser.id : null,
+        // Limpa o currentUser para evitar serialização completa
+        currentUser: null 
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
 }
 
-// Função para carregar o estado do LocalStorage e restaurar a sessão
+// Carrega o estado do LocalStorage e restaura a sessão
 function loadState() {
     const serializedState = localStorage.getItem(STORAGE_KEY);
     if (serializedState === null) {
@@ -47,15 +52,14 @@ function loadState() {
     
     // RESTAURAÇÃO DA SESSÃO: Encontra o usuário a partir do ID salvo
     if (loadedState.currentUserId) {
+        // Encontra o usuário na lista de users
         loadedState.currentUser = loadedState.users.find(u => u.id === loadedState.currentUserId) || null;
     } else {
         loadedState.currentUser = null;
     }
     
-    // Assegura que currentDate seja um objeto Date
     loadedState.currentDate = new Date(loadedState.currentDate);
     
-    // Garante que o admin padrão exista
     if (!loadedState.users.find(u => u.id === 'admin')) {
         loadedState.users.push(initialAppState.users.find(u => u.id === 'admin'));
     }
@@ -63,14 +67,12 @@ function loadState() {
     return loadedState;
 }
 
-// Função para formatar números para moeda BRL (R$)
 const formatCurrency = (value) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-// Formata a data para exibição na lista usando dateFns global
+// Usa dateFns global
 const formatDate = (dateString) => {
-    // Agora usando o objeto global 'dateFns'
     return dateFns.format(dateFns.parseISO(dateString), 'dd/MM/yyyy');
 };
 
@@ -92,14 +94,12 @@ function handleLogin(e) {
         appState.currentUser = user;
         user.lastLogin = new Date().toISOString();
         
-        // CORREÇÃO CRÍTICA: Salvar o estado ANTES de atualizar a UI
-        saveState();
+        saveState(); // Salva antes de iniciar a UI
         
         // Esconde login e mostra o app
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
         
-        // Inicializa a interface do usuário logado
         initializeAppUI();
         
     } else {
@@ -112,13 +112,23 @@ function handleLogout() {
     appState.currentUser = null;
     saveState();
     
-    // Limpar e retornar à tela de login
+    // Retorna à tela de login sem recarregar a página
     document.getElementById('app').classList.add('hidden');
     document.getElementById('login-screen').classList.remove('hidden');
+    
+    // Volta a view para Home
+    document.querySelector('.nav-btn.active')?.classList.remove('active');
+    document.querySelector('[data-view="home"]').classList.add('active');
+    document.querySelector('.view.active')?.classList.add('hidden');
+    document.getElementById('view-home').classList.remove('hidden');
 }
 
 
 function checkAuthAndInit() {
+    // 1. Instala Listeners (Novo: Rodar aqui)
+    setupEventListeners();
+    
+    // 2. Tenta Restaurar a Sessão
     if (appState.currentUser) {
         // Usuário encontrado na sessão (localStorage)
         document.getElementById('login-screen').classList.add('hidden');
@@ -129,11 +139,17 @@ function checkAuthAndInit() {
         document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('app').classList.add('hidden');
     }
+    
+    // 3. Preenche a data inicial do formulário
+    const dateInput = document.querySelector('#form-add-transaction input[name="date"]');
+    if(dateInput) {
+        dateInput.value = dateFns.format(new Date(), 'yyyy-MM-dd');
+    }
 }
 
 /**
  * ========================================
- * 4. LÓGICA DE TRANSAÇÕES
+ * 4. LÓGICA DE TRANSAÇÕES (Não alterada, apenas funções usadas)
  * ========================================
  */
 
@@ -145,7 +161,7 @@ function getTransactionsForCurrentUserMonth() {
     const userId = appState.currentUser.id;
 
     return appState.transactions
-        .filter(t => t.userId === userId) // Filtra apenas as do usuário logado
+        .filter(t => t.userId === userId)
         .filter(t => {
             const tDate = dateFns.parseISO(t.date);
             return tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear;
@@ -153,7 +169,6 @@ function getTransactionsForCurrentUserMonth() {
         .sort((a, b) => b.timestamp - a.timestamp);
 }
 
-// Função principal de cálculo e atualização da UI
 function updateSummary() {
     const filteredTransactions = getTransactionsForCurrentUserMonth();
     
@@ -174,13 +189,10 @@ function updateSummary() {
     document.getElementById('summary-expense').textContent = formatCurrency(expense);
     document.getElementById('summary-balance').textContent = formatCurrency(balance);
     
-    updateExpenseChart(filteredTransactions);
+    // updateExpenseChart(filteredTransactions); // Gráfico não implementado para simplificar
     renderTransactionList(filteredTransactions);
 }
 
-/**
- * Gerencia a lógica de repetição de gastos/rendas e adiciona ao estado.
- */
 function addTransaction(data) {
     const amount = parseFloat(data.get('amount'));
     const recurrence = parseInt(data.get('recurrence'), 10);
@@ -200,7 +212,6 @@ function addTransaction(data) {
     };
     appState.transactions.push(baseTransaction);
 
-    // Adiciona as transações recorrentes
     if (recurrence > 1) {
         let currentDate = dateFns.parseISO(dateInput);
         for (let i = 1; i < recurrence; i++) {
@@ -222,9 +233,6 @@ function addTransaction(data) {
     updateSummary();
 }
 
-/**
- * Exclui uma transação do estado.
- */
 function deleteTransaction(id) {
     appState.transactions = appState.transactions.filter(t => t.id !== id);
     saveState();
@@ -236,14 +244,13 @@ function deleteTransaction(id) {
 
 /**
  * ========================================
- * 5. LÓGICA DE RENDERIZAÇÃO
+ * 5. LÓGICA DE RENDERIZAÇÃO (Não alterada)
  * ========================================
  */
 
 function initializeAppUI() {
     document.getElementById('user-name').textContent = appState.currentUser.username;
     
-    // Mostra/Esconde a aba Admin
     const adminNav = document.getElementById('nav-admin');
     if (appState.currentUser.role === 'admin') {
         adminNav.classList.remove('hidden');
@@ -251,9 +258,9 @@ function initializeAppUI() {
         adminNav.classList.add('hidden');
     }
     
-    // Atualiza o estado da aplicação
     updateMonthDisplay();
     updateSummary();
+    setupNavigation(); // Configura navegação após a inicialização
 }
 
 function updateMonthDisplay() {
@@ -268,12 +275,10 @@ function renderTransactionList(transactions) {
     listContainer.innerHTML = '';
     latestListContainer.innerHTML = '';
 
-    // Extrato Completo (com botão de exclusão)
     transactions.forEach(t => {
         listContainer.innerHTML += createTransactionHTML(t, true);
     });
     
-    // Últimos Lançamentos (Home View, sem botão de exclusão)
     transactions.slice(0, 5).forEach(t => {
         latestListContainer.innerHTML += createTransactionHTML(t, false);
     });
@@ -282,7 +287,6 @@ function renderTransactionList(transactions) {
         listContainer.innerHTML = '<p style="text-align:center; color:#999; padding:20px;">Nenhum lançamento neste mês.</p>';
     }
 
-    // Adiciona event listeners para exclusão
     document.querySelectorAll('.btn-delete-transaction').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = parseInt(e.target.closest('button').dataset.id);
@@ -317,13 +321,9 @@ function createTransactionHTML(t, showDeleteButton) {
     `;
 }
 
-/**
- * Lógica da Tela Admin
- */
 function renderAdminView() {
     if (appState.currentUser.role !== 'admin') return;
 
-    // --- Renderizar Lista de Usuários ---
     const userList = document.getElementById('user-list');
     userList.innerHTML = '';
     
@@ -346,7 +346,6 @@ function renderAdminView() {
         `;
     });
 
-    // Adiciona listeners para excluir usuários
     document.querySelectorAll('.btn-delete-user').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.target.closest('button').dataset.id;
@@ -356,7 +355,6 @@ function renderAdminView() {
         });
     });
     
-    // Adiciona listeners para editar usuários
     document.querySelectorAll('.btn-edit-user').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.target.closest('button').dataset.id;
@@ -364,12 +362,9 @@ function renderAdminView() {
         });
     });
 
-
-    // --- Renderizar Histórico Global ---
     const globalHistory = document.getElementById('global-history');
     globalHistory.innerHTML = '';
 
-    // Transações de todos os usuários, ordenadas
     const allTransactions = [...appState.transactions].sort((a, b) => b.timestamp - a.timestamp);
     
     allTransactions.forEach(t => {
@@ -400,7 +395,6 @@ function deleteUser(userId) {
 }
 
 function openUserModal(userId = null) {
-    // ... (Mantém a lógica de abrir/preencher modal de usuário)
     const modal = document.getElementById('modal-user-overlay');
     const form = document.getElementById('form-add-user');
     const title = document.getElementById('modal-user-title');
@@ -480,10 +474,19 @@ function setupEventListeners() {
     // Modal de Transação
     const modalOverlay = document.getElementById('modal-overlay');
     document.getElementById('btn-open-modal').addEventListener('click', () => modalOverlay.classList.remove('hidden'));
-    document.getElementById('close-modal').addEventListener('click', () => modalOverlay.classList.add('hidden'));
-    document.getElementById('cancel-modal').addEventListener('click', () => modalOverlay.classList.add('hidden'));
+    document.getElementById('close-modal').addEventListener('click', () => {
+        modalOverlay.classList.add('hidden');
+        document.getElementById('form-add-transaction').reset(); // Limpa o formulário ao fechar
+    });
+    document.getElementById('cancel-modal').addEventListener('click', () => {
+        modalOverlay.classList.add('hidden');
+        document.getElementById('form-add-transaction').reset();
+    });
     modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
+        if (e.target === modalOverlay) {
+            modalOverlay.classList.add('hidden');
+            document.getElementById('form-add-transaction').reset();
+        }
     });
 
     // Form de Nova Transação
@@ -493,7 +496,10 @@ function setupEventListeners() {
         addTransaction(formData);
         this.reset();
         modalOverlay.classList.add('hidden');
-        this.querySelector('input[name="date"]').value = dateFns.format(new Date(), 'yyyy-MM-dd');
+        const dateInput = this.querySelector('input[name="date"]');
+        if(dateInput) {
+             dateInput.value = dateFns.format(new Date(), 'yyyy-MM-dd');
+        }
     });
 
     // Admin Modals
@@ -541,9 +547,6 @@ function setupEventListeners() {
 
 // Inicialização Principal
 document.addEventListener('DOMContentLoaded', () => {
-    setupEventListeners();
-    checkAuthAndInit(); // Checa se há uma sessão ativa e inicia o app
-    
-    // Preenche a data do formulário inicialmente
-    document.querySelector('#form-add-transaction input[name="date"]').value = dateFns.format(new Date(), 'yyyy-MM-dd');
+    // O setupEventListeners e o preenchimento de data agora rodam dentro de checkAuthAndInit
+    checkAuthAndInit(); 
 });
